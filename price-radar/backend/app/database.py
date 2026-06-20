@@ -1,20 +1,26 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from datetime import datetime
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, Integer, String, Float, DateTime
 
-# Адрес подключения берет параметры из настроек docker-compose.yml
-# Имя хоста 'db' совпадает с именем контейнера БД в сети Docker
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@db:5432/pricedb")
+DATABASE_URL = "sqlite+aiosqlite:///./radar.db"
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
+engine = create_async_engine(DATABASE_URL, echo=False)
+AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
-# Генератор сессий для инъекции зависимостей FastAPI
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+class PriceHistory(Base):
+    __tablename__ = "price_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    ticker = Column(String, index=True, nullable=False)
+    price = Column(Float, nullable=False)
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
